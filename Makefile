@@ -36,6 +36,8 @@ export PATH := $(PWD)/$(BUILD_DIR):$(PWD)/$(TOOLS_DIR):$(PATH)
 export IMAGE_REPO ?= quay.io/operator-framework/ansible-operator
 export IMAGE_TAG ?= dev
 
+ENVTEST ?= $(LOCALBIN)/setup-envtest
+
 ##@ Development
 
 .PHONY: generate
@@ -124,8 +126,18 @@ test-docs: ## Test doc links
 
 .PHONY: test-unit
 TEST_PKGS = $(shell go list ./... | grep -v -E 'github.com/operator-framework/ansible-operator-plugins/test/')
-test-unit: ## Run unit tests
+test-unit: envtest ## Run unit tests
+	## KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(K8S_VERSION) -p path)"
 	go test -coverprofile=coverage.out -covermode=count -short $(TEST_PKGS)
+
+.PHONY: scratch
+scratch: ##envtest
+	echo $(KUBEBUILDER_ASSETS)
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
+$(ENVTEST): $(LOCALBIN)
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
 e2e_tests := test-e2e-ansible test-e2e-ansible-molecule
 e2e_targets := test-e2e $(e2e_tests)
@@ -134,7 +146,7 @@ e2e_targets := test-e2e $(e2e_tests)
 .PHONY: test-e2e-setup
 export KIND_CLUSTER := osdk-test
 
-KUBEBUILDER_ASSETS = $(PWD)/$(shell go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest && $(shell go env GOPATH)/bin/setup-envtest use $(K8S_VERSION) --bin-dir tools/bin/ -p path)
+KUBEBUILDER_ASSETS = $(PWD)/$(shell go install sigs.k8s.io/controller-runtime/tools/setup-envtest@$(K8S_VERSION) && $(shell go env GOPATH)/bin/setup-envtest use $(K8S_VERSION) --bin-dir tools/bin/ -p path)
 test-e2e-setup:: build dev-install cluster-create
 
 .PHONY: cluster-create
